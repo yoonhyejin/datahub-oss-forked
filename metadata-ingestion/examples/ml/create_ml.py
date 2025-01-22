@@ -1,8 +1,8 @@
+import argparse
 import random
 import time
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Union
-import argparse
 
 import datahub.metadata.schema_classes as models
 from datahub.api.entities.datajob import DataFlow, DataJob
@@ -392,7 +392,6 @@ def generate_pipeline(
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", help="Datahub Access Token")
     args = parser.parse_args()
