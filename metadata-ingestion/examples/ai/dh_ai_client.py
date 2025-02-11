@@ -311,7 +311,7 @@ class DatahubAIClient:
                 models.DataProcessInstancePropertiesClass, kwargs
             )
             ),
-            models.SubTypesClass(typeNames=["ML Training Job"]),
+            models.SubTypesClass(typeNames=["ML Training Run"]),
         ]
 
         # Add training run properties if provided

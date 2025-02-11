@@ -175,7 +175,7 @@ def create_experiment(args, client, artifacts):
 if __name__ == "__main__":
     # Example usage
     parser = argparse.ArgumentParser()
-    parser.add_argument("--token", required=False, help="DataHub access token")
+    parser.add_argument("--token", default="eyJhbGciOiJIUzI1NiJ9.eyJhY3RvclR5cGUiOiJVU0VSIiwiYWN0b3JJZCI6ImRhdGFodWIiLCJ0eXBlIjoiUEVSU09OQUwiLCJ2ZXJzaW9uIjoiMiIsImp0aSI6IjE1OWYxZWE5LWRmMTMtNGEzYS1hZjRhLWFmODRkNDIyN2MwOCIsInN1YiI6ImRhdGFodWIiLCJleHAiOjE3NDE5MDYyMDcsImlzcyI6ImRhdGFodWItbWV0YWRhdGEtc2VydmljZSJ9.hY8g-90xr5ZdJpv7sa3I0ZsiThyKe0V1U6kKZHiO5qY",required=False, help="DataHub access token")
     parser.add_argument(
         "--server_url",
         required=False,
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     # Create Client
-    client = DatahubAIClient(token=args.token, server_url=args.server_url)
+    client = DatahubAIClient(token=args.token, server_url=args.server_url, platform="vertexai")
 
     artifacts = create_training_pipeline(args, client)
 
