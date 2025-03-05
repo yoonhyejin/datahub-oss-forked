@@ -61,6 +61,7 @@ from datahub.metadata.schema_classes import (
     TagPropertiesClass,
     TimeStampClass,
     VersionPropertiesClass,
+    VersionSetPropertiesClass,
     VersionTagClass,
     _Aspect,
 )
@@ -69,6 +70,7 @@ from datahub.metadata.urns import (
     VersionSetUrn,
 )
 from datahub.sdk.container import Container
+from datahub.ingestion.graph.client import DataHubGraph, get_default_graph
 
 T = TypeVar("T")
 
@@ -155,6 +157,7 @@ class MLflowSource(StatefulIngestionSourceBase):
             tracking_uri=self.config.tracking_uri,
             registry_uri=self.config.registry_uri,
         )
+        self.graph = get_default_graph()
 
     def get_report(self) -> SourceReport:
         return self.report
@@ -498,18 +501,23 @@ class MLflowSource(StatefulIngestionSourceBase):
             version_set_urn = self._get_version_set_urn(registered_model)
             yield self._get_ml_group_workunit(registered_model)
             model_versions = self._get_mlflow_model_versions(registered_model)
-            for model_version in model_versions:
-                run = self._get_mlflow_run(model_version)
-                yield self._get_ml_model_properties_workunit(
+            if len(list(model_versions)) > 0:
+                for model_version in model_versions:
+                    run = self._get_mlflow_run(model_version)
+                    yield self._get_ml_model_properties_workunit(
+                        registered_model=registered_model,
+                        model_version=model_version,
+                        run=run,
+                    )
+                    yield self._get_ml_model_version_properties_workunit(
+                        model_version=model_version,
+                        version_set_urn=version_set_urn,
+                    )
+                    yield self._get_global_tags_workunit(model_version=model_version)
+                yield self._get_version_latest(
                     registered_model=registered_model,
-                    model_version=model_version,
-                    run=run,
-                )
-                yield self._get_ml_model_version_properties_workunit(
-                    model_version=model_version,
                     version_set_urn=version_set_urn,
                 )
-                yield self._get_global_tags_workunit(model_version=model_version)
 
     def _get_version_set_urn(self, registered_model: RegisteredModel) -> VersionSetUrn:
         version_set_urn = VersionSetUrn(
@@ -518,6 +526,32 @@ class MLflowSource(StatefulIngestionSourceBase):
         )
 
         return version_set_urn
+
+    def _get_version_latest(
+            self, registered_model: RegisteredModel, version_set_urn: VersionSetUrn
+    ) -> MetadataWorkUnit:
+
+        latest_model_version = registered_model.latest_versions[0]
+        latest_ml_model_urn = self._make_ml_model_urn(latest_model_version)
+        version_set_properties = VersionSetPropertiesClass(
+            latest=str(
+                latest_ml_model_urn
+            ),
+            versioningScheme="LEXICOGRAPHIC_STRING",
+        )
+
+        wu = MetadataChangeProposalWrapper(
+            entityUrn=str(version_set_urn),
+            aspect=version_set_properties,
+        ).as_workunit()
+
+        # does the latest ml model versioned?
+        # model_version_properties = self.graph.get_aspect(entity_urn=latest_ml_model_urn, aspect_type=VersionPropertiesClass)
+        # print("LATEST MODEL URN", latest_ml_model_urn)
+        # print("MODEL VERSION PROPERTIES", model_version_properties)
+        # print("---------")
+
+        return wu
 
     def _get_ml_model_version_properties_workunit(
         self,
