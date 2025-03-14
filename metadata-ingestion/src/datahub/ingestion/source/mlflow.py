@@ -39,7 +39,6 @@ from datahub.ingestion.source.state.stateful_ingestion_base import (
     StatefulIngestionConfigBase,
     StatefulIngestionSourceBase,
 )
-from datahub.metadata.com.linkedin.pegasus2avro.common import Siblings
 from datahub.metadata.schema_classes import (
     AuditStampClass,
     ContainerClass,
@@ -50,6 +49,7 @@ from datahub.metadata.schema_classes import (
     DataProcessInstanceRunEventClass,
     DataProcessInstanceRunResultClass,
     DataProcessRunStatusClass,
+    EdgeClass,
     GlobalTagsClass,
     MetadataAttributionClass,
     MLHyperParamClass,
@@ -62,11 +62,13 @@ from datahub.metadata.schema_classes import (
     TagAssociationClass,
     TagPropertiesClass,
     TimeStampClass,
+    UpstreamClass,
+    UpstreamLineageClass,
     VersionPropertiesClass,
     VersionTagClass,
     _Aspect,
 )
-from datahub.metadata.urns import DataPlatformUrn, DatasetUrn, MlModelUrn, VersionSetUrn
+from datahub.metadata.urns import DataPlatformUrn, MlModelUrn, VersionSetUrn
 from datahub.sdk.container import Container
 from datahub.sdk.dataset import Dataset
 
@@ -206,14 +208,13 @@ class MLflowSource(StatefulIngestionSourceBase):
     def _get_experiment_workunits(self) -> Iterable[MetadataWorkUnit]:
         experiments = self._get_mlflow_experiments()
         for experiment in experiments:
-            if experiment.name == "lineage_platform_dataset_lineage_experiment":
-                yield from self._get_experiment_container_workunit(experiment)
+            yield from self._get_experiment_container_workunit(experiment)
 
-                runs = self._get_mlflow_runs_from_experiment(experiment)
-                if runs:
-                    for run in runs:
-                        yield from self._get_run_workunits(experiment, run)
-                        yield from self._get_dataset_input_workunits(run)
+            runs = self._get_mlflow_runs_from_experiment(experiment)
+            if runs:
+                for run in runs:
+                    yield from self._get_run_workunits(experiment, run)
+                    yield from self._get_dataset_input_workunits(run)
 
     def _get_experiment_custom_properties(self, experiment):
         experiment_custom_props = getattr(experiment, "tags", {}) or {}
@@ -317,30 +318,22 @@ class MLflowSource(StatefulIngestionSourceBase):
                 dataset_reference_urns.append(str(local_dataset_reference.urn))
 
             else:
-                # workaround for setting siblings
-                hosted_dataset_reference_urn = DatasetUrn.create_from_ids(
-                    platform_id=self.platform, table_name=dataset.name, env="PROD"
-                )
                 hosted_dataset = Dataset(
                     platform=self._get_dataset_platform_from_source_type(source_type),
                     name=dataset.name,
                     schema=formatted_schema,
                     custom_properties=dataset_tags,
-                    extra_aspects=[
-                        Siblings(
-                            primary=True, siblings=[str(hosted_dataset_reference_urn)]
-                        )
-                    ],
                 )
-                # create dataset reference
                 hosted_dataset_reference = Dataset(
                     platform=self.platform,
                     name=dataset.name,
                     schema=formatted_schema,
                     custom_properties=dataset_tags,
-                    extra_aspects=[
-                        Siblings(primary=False, siblings=[str(hosted_dataset.urn)])
-                    ],
+                    upstreams=UpstreamLineageClass(
+                        upstreams=[
+                            UpstreamClass(dataset=str(hosted_dataset.urn), type="COPY")
+                        ]
+                    ),
                 )
                 dataset_reference_urns.append(str(hosted_dataset_reference.urn))
 
@@ -348,9 +341,13 @@ class MLflowSource(StatefulIngestionSourceBase):
                 yield from hosted_dataset_reference.as_workunits()
 
         if dataset_reference_urns:
+            input_edges = [
+                EdgeClass(destinationUrn=dataset_referece_urn)
+                for dataset_referece_urn in dataset_reference_urns
+            ]
             yield MetadataChangeProposalWrapper(
                 entityUrn=str(run_urn),
-                aspect=DataProcessInstanceInputClass(inputs=dataset_reference_urns),
+                aspect=DataProcessInstanceInputClass(inputs=[], inputEdges=input_edges),
             ).as_workunit()
 
     def _get_run_workunits(
