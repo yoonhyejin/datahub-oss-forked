@@ -3,25 +3,29 @@ name: Notify Slack on New Docs
 on:
   push:
     branches:
-      - docs/slack-noti-ci
-      # - master
+      - docs/slack-noti-ci 
     paths:
       - 'docs/**.md'
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 
+        with:
+          fetch-depth: 0
 
       - name: Detect new .md files
         id: check_docs
         run: |
-          NEW_DOCS=$(git diff --name-status ${{ github.event.before }} ${{ github.sha }} | grep '^A' | grep '\.md$' | cut -f2-)
-          echo "NEW_DOCS<<EOF" >> $GITHUB_ENV
-          echo "$NEW_DOCS" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          NEW_DOCS=$(git diff --name-status "${{ github.event.before }}" "${{ github.sha }}" | grep '^A' | grep '\.md$' | cut -f2-)
+          {
+            echo "NEW_DOCS<<EOF"
+            echo "$NEW_DOCS"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Notify Slack
         if: env.NEW_DOCS != ''
@@ -32,4 +36,4 @@ jobs:
               "text": "*📘 New Docs Published on `${{ github.ref_name }}`!*\n\n${{ env.NEW_DOCS }}"
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} 
